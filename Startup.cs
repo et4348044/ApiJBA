@@ -14,8 +14,8 @@ namespace ApiJBA
 
         public void ConfigureServices(IServiceCollection services)
         {
-            // Registrar ApplicationDbContext usando la cadena de conexión de appsettings.json
-            services.AddDbContext<ApplicationDbContext>(options =>
+            // Registrar ApplicationDbContext con Pooling para maximizar el rendimiento en CPU de pocos recursos
+            services.AddDbContextPool<ApplicationDbContext>(options =>
                 options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection")));
 
             // Configurar los controladores ignorando los ciclos de referencia en JSON

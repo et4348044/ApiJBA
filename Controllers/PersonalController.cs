@@ -25,7 +25,7 @@ namespace ApiJBA.Controllers
         [HttpGet]
         public async Task<ActionResult<List<CreacionDePersonal_Get_DTO>>> Get()
         {
-            var personalList = await context.Personal.ToListAsync();
+            var personalList = await context.Personal.AsNoTracking().ToListAsync();
             var dto = mapper.Map<List<CreacionDePersonal_Get_DTO>>(personalList);
             return Ok(dto);
         }
@@ -34,16 +34,19 @@ namespace ApiJBA.Controllers
         [HttpGet("ids")]
         public async Task<ActionResult<List<PersonalIdDto>>> GetIds()
         {
-            var personalList = await context.Personal.ToListAsync();
-            var dto = mapper.Map<List<PersonalIdDto>>(personalList);
-            return Ok(dto);
+            // Optimización premium: Proyección selectiva directa desde BD evitando cargar columnas pesadas en memoria
+            var ids = await context.Personal
+                .AsNoTracking()
+                .Select(x => new PersonalIdDto { id_p = x.ci_p })
+                .ToListAsync();
+            return Ok(ids);
         }
 
         // 2. GET: api/personal/{ci} - Obtener personal por Cédula (PK)
         [HttpGet("{ci}")]
         public async Task<ActionResult<CreacionDePersonal_Get_DTO>> GetByCi(string ci)
         {
-            var personal = await context.Personal.FirstOrDefaultAsync(x => x.ci_p == ci);
+            var personal = await context.Personal.AsNoTracking().FirstOrDefaultAsync(x => x.ci_p == ci);
             if (personal == null)
             {
                 return NotFound($"No se encontró personal con la cédula: {ci}");
@@ -110,7 +113,7 @@ namespace ApiJBA.Controllers
         [HttpPost("login")]
         public async Task<ActionResult> Login(LoginDto loginDto)
         {
-            var personal = await context.Personal.FirstOrDefaultAsync(x => x.ci_p == loginDto.ci_p);
+            var personal = await context.Personal.AsNoTracking().FirstOrDefaultAsync(x => x.ci_p == loginDto.ci_p);
             if (personal == null)
             {
                 return NotFound($"No se encontró personal registrado con la cédula: {loginDto.ci_p}");

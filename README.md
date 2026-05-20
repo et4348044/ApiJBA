@@ -25,7 +25,7 @@ ApiJBA es una API Web robusta y moderna desarrollada en **ASP.NET Core (C#)** di
 
 ## Configuración y Base de Datos
 
-La API utiliza SQL Server. Puedes configurar la cadena de conexión en el archivo `appsettings.Development.json`:
+La API utiliza **SQL Server** como motor de base de datos principal. La cadena de conexión está configurada en `appsettings.Development.json` apuntando a la base de datos `BD_JBA`:
 
 ```json
 "ConnectionStrings": {
@@ -33,12 +33,36 @@ La API utiliza SQL Server. Puedes configurar la cadena de conexión en el archiv
 }
 ```
 
+### Inicialización de la Base de Datos
+Para facilitar la portabilidad y el despliegue rápido, la base de datos se ha exportado como un script SQL estruturado. Para inicializarla desde cero:
+1. Abra su cliente SQL Server preferido (por ejemplo, SQL Server Management Studio o Azure Data Studio) y conéctese a su servidor local.
+2. Abra el archivo de inicialización ubicado en `Database/BD_JBA.sql`.
+3. Descomente las primeras líneas de creación (`CREATE DATABASE [BD_JBA]; GO USE [BD_JBA]; GO`) o cree manualmente una base de datos vacía llamada `BD_JBA` y ejecute el script completo.
+4. Una vez ejecutado, las tablas `personal` y `__EFMigrationsHistory` se habrán configurado correctamente y listas para el uso con la API.
+
+---
+
+## Optimización para Servidores de Recursos Limitados (i5 4ª Gen)
+
+Para garantizar un rendimiento excelente bajo especificaciones de hardware de gama de entrada o servidores heredados (como procesadores Intel Core i5 de 4.ª generación con número limitado de hilos/núcleos físicos), se han implementado las siguientes optimizaciones de grado de producción en el código de la API:
+
+1. **DbContext Pooling (`AddDbContextPool`)**: 
+   - Habilitado en `Startup.cs`. En lugar de instanciar y destruir un contexto de base de datos para cada petición HTTP HTTP, ASP.NET Core reutiliza un pool pre-calentado de contextos. Esto reduce significativamente la presión sobre la recolección de basura (Garbage Collector) y ahorra valiosos ciclos de reloj de la CPU.
+2. **Consultas Asíncronas Completas**: 
+   - Todas las llamadas al motor de base de datos se ejecutan asíncronamente mediante `await` (`ToListAsync`, `FirstOrDefaultAsync`, `AnyAsync`). Esto previene el bloqueo de hilos del servidor web Kestrel, permitiéndole atender múltiples peticiones concurrentes de manera fluida sin agotar el pool de hilos.
+3. **No-Tracking en Consultas de Solo Lectura (`AsNoTracking`)**: 
+   - Implementado en todos los endpoints de lectura (`GET` de lista completa, de ID individual y login). Entity Framework Core no realiza seguimiento del estado de las entidades, eliminando overhead de memoria RAM y acelerando la velocidad de respuesta.
+4. **Proyección Directa y Selectiva (Select Projections)**: 
+   - En el endpoint de consulta rápida de IDs (`GET api/personal/ids`), se ha implementado una proyección selectiva de base de datos para recuperar únicamente el campo indexado `ci_p`. Esto evita cargar columnas de datos pesadas (como el campo binario `Archivo`) a la memoria RAM del servidor, minimizando el tráfico de red de base de datos.
+
+---
+
 ## Endpoints Disponibles
 
 ### Personal
 
-- `GET /api/personal` - Obtener la lista completa de personal.
-- `GET /api/personal/ids` - Obtener la lista únicamente con los IDs (cédulas) del personal.
+- `GET /api/personal` - Obtener la lista completa de personal (Optimizada con `AsNoTracking`).
+- `GET /api/personal/ids` - Obtener la lista únicamente con los IDs (cédulas) del personal (Proyección selectiva ultraligera de BD).
 - `GET /api/personal/{ci}` - Obtener el perfil detallado del personal por su cédula (`ci_p`).
 - `POST /api/personal` - Registrar un nuevo personal en el sistema (admite niveles del 1 al 10).
 - `PUT /api/personal/{ci}` - Actualizar los datos del personal.
@@ -52,3 +76,4 @@ La API utiliza SQL Server. Puedes configurar la cadena de conexión en el archiv
   }
   ```
   *Nota: Retorna éxito si el nivel del usuario es mayor o igual a 7.*
+
