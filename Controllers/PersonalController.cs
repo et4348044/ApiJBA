@@ -5,6 +5,12 @@ using ApiJBA.DTOs;
 using ApiJBA.Entidades;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using Microsoft.Extensions.Configuration;
 
 namespace ApiJBA.Controllers
 {
@@ -14,15 +20,18 @@ namespace ApiJBA.Controllers
     {
         private readonly ApplicationDbContext context;
         private readonly IMapper mapper;
+        private readonly IConfiguration configuration;
 
-        public PersonalController(ApplicationDbContext context, IMapper mapper)
+        public PersonalController(ApplicationDbContext context, IMapper mapper, IConfiguration configuration)
         {
             this.context = context;
             this.mapper = mapper;
+            this.configuration = configuration;
         }
 
         // 1. GET: api/personal - Obtener todo el personal
         [HttpGet]
+        [Authorize(Policy = "Nivel7")]
         public async Task<ActionResult<List<CreacionDePersonal_Get_DTO>>> Get()
         {
             var personalList = await context.Personal.AsNoTracking().ToListAsync();
@@ -32,6 +41,7 @@ namespace ApiJBA.Controllers
 
         // 1b. GET: api/personal/ids - Obtener solo los IDs del personal creado
         [HttpGet("ids")]
+        [Authorize(Policy = "Nivel7")]
         public async Task<ActionResult<List<PersonalIdDto>>> GetIds()
         {
             // Optimización premium: Proyección selectiva directa desde BD evitando cargar columnas pesadas en memoria
@@ -44,6 +54,7 @@ namespace ApiJBA.Controllers
 
         // 2. GET: api/personal/{ci} - Obtener personal por Cédula (PK)
         [HttpGet("{ci}")]
+        [Authorize(Policy = "Nivel7")]
         public async Task<ActionResult<CreacionDePersonal_Get_DTO>> GetByCi(string ci)
         {
             var personal = await context.Personal.AsNoTracking().FirstOrDefaultAsync(x => x.ci_p == ci);
@@ -57,6 +68,7 @@ namespace ApiJBA.Controllers
 
         // 3. POST: api/personal - Registrar un nuevo personal
         [HttpPost]
+        [Authorize(Policy = "Nivel10")]
         public async Task<ActionResult> Post(CreacionDePersonal_Post_DTO creacionDePersonal_Post_DTO)
         {
             // Validar si ya existe un registro con la misma Cédula (PK)
@@ -83,6 +95,7 @@ namespace ApiJBA.Controllers
 
         // 4. PUT: api/personal/{ci} - Actualizar datos del personal
         [HttpPut("{ci}")]
+        [Authorize(Policy = "Nivel10")]
         public async Task<ActionResult> Put(string ci, CreacionDePersonal_Get_DTO creacionDePersonal_Get_DTO)
         {
             if (ci != creacionDePersonal_Get_DTO.ci_p)
@@ -111,6 +124,7 @@ namespace ApiJBA.Controllers
 
         // 5. POST: api/personal/login - Iniciar sesión validando el nivel de rango (nivel >= 7)
         [HttpPost("login")]
+        [AllowAnonymous]
         public async Task<ActionResult> Login(LoginDto loginDto)
         {
             var personal = await context.Personal.AsNoTracking().FirstOrDefaultAsync(x => x.ci_p == loginDto.ci_p);
@@ -125,10 +139,36 @@ namespace ApiJBA.Controllers
                 return BadRequest($"Acceso denegado. Tu nivel de rango ({personal.nivel}) es inferior al mínimo requerido (nivel 7) para utilizar el sistema.");
             }
 
+            // Generar el Token JWT
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, personal.ci_p),
+                new Claim(ClaimTypes.Name, personal.nombre_p),
+                new Claim("Nivel", personal.nivel.ToString())
+            };
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["Jwt:Key"] ?? throw new InvalidOperationException("Clave JWT (Jwt:Key) no configurada.")));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(claims),
+                Expires = DateTime.UtcNow.AddMinutes(5), // Expiración de 5 minutos
+                Issuer = configuration["Jwt:Issuer"],
+                Audience = configuration["Jwt:Audience"],
+                SigningCredentials = creds
+            };
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+            var tokenString = tokenHandler.WriteToken(token);
+
             var dto = mapper.Map<CreacionDePersonal_Get_DTO>(personal);
             return Ok(new
             {
                 mensaje = "Inicio de sesión exitoso. Bienvenido al sistema.",
+                token = tokenString,
+                expiracion = tokenDescriptor.Expires,
                 usuario = dto
             });
         }
