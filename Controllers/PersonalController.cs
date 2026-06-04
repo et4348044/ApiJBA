@@ -5,17 +5,20 @@ using ApiJBA.DTOs;
 using ApiJBA.Entidades;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using Microsoft.Extensions.Configuration;
+using System;
 
 namespace ApiJBA.Controllers
 {
     [ApiController]
     [Route("api/personal")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     public class PersonalController : ControllerBase
     {
         private readonly ApplicationDbContext context;
@@ -31,7 +34,7 @@ namespace ApiJBA.Controllers
 
         // 1. GET: api/personal - Obtener todo el personal
         [HttpGet]
-        [Authorize(Policy = "Nivel7")]
+        [Authorize(Policy = "NivelOperativo")]
         public async Task<ActionResult<List<CreacionDePersonal_Get_DTO>>> Get()
         {
             var personalList = await context.Personal.AsNoTracking().ToListAsync();
@@ -41,7 +44,7 @@ namespace ApiJBA.Controllers
 
         // 1b. GET: api/personal/ids - Obtener solo los IDs del personal creado
         [HttpGet("ids")]
-        [Authorize(Policy = "Nivel7")]
+        [Authorize(Policy = "NivelOperativo")]
         public async Task<ActionResult<List<PersonalIdDto>>> GetIds()
         {
             // Optimización premium: Proyección selectiva directa desde BD evitando cargar columnas pesadas en memoria
@@ -54,7 +57,7 @@ namespace ApiJBA.Controllers
 
         // 2. GET: api/personal/{ci} - Obtener personal por Cédula (PK)
         [HttpGet("{ci}")]
-        [Authorize(Policy = "Nivel7")]
+        [Authorize(Policy = "NivelOperativo")]
         public async Task<ActionResult<CreacionDePersonal_Get_DTO>> GetByCi(string ci)
         {
             var personal = await context.Personal.AsNoTracking().FirstOrDefaultAsync(x => x.ci_p == ci);
@@ -68,9 +71,22 @@ namespace ApiJBA.Controllers
 
         // 3. POST: api/personal - Registrar un nuevo personal
         [HttpPost]
-        [Authorize(Policy = "Nivel10")]
+        [Authorize(Policy = "NivelOperativo")]
         public async Task<ActionResult> Post(CreacionDePersonal_Post_DTO creacionDePersonal_Post_DTO)
         {
+            // Obtener nivel del creador
+            var nivelClaim = User.FindFirst("Nivel")?.Value;
+            if (!int.TryParse(nivelClaim, out int nivelActor))
+            {
+                return Unauthorized("No se pudo determinar tu nivel de acceso.");
+            }
+
+            // Validar Jerarquía: No puede crear a alguien con mayor nivel que él mismo
+            if (nivelActor < creacionDePersonal_Post_DTO.nivel)
+            {
+                return StatusCode(403, new { mensaje = $"Acceso denegado. No puedes crear un usuario con nivel {creacionDePersonal_Post_DTO.nivel} porque tu nivel es {nivelActor}." });
+            }
+
             // Validar si ya existe un registro con la misma Cédula (PK)
             var existe = await context.Personal.AnyAsync(x => x.ci_p == creacionDePersonal_Post_DTO.ci_p);
             if (existe)
@@ -95,7 +111,7 @@ namespace ApiJBA.Controllers
 
         // 4. PUT: api/personal/{ci} - Actualizar datos del personal
         [HttpPut("{ci}")]
-        [Authorize(Policy = "Nivel10")]
+        [Authorize(Policy = "NivelOperativo")]
         public async Task<ActionResult> Put(string ci, CreacionDePersonal_Get_DTO creacionDePersonal_Get_DTO)
         {
             if (ci != creacionDePersonal_Get_DTO.ci_p)
@@ -103,10 +119,29 @@ namespace ApiJBA.Controllers
                 return BadRequest("La cédula proporcionada no coincide con el cuerpo de la solicitud.");
             }
 
-            var existe = await context.Personal.AnyAsync(x => x.ci_p == ci);
-            if (!existe)
+            // Obtener nivel del usuario que hace la solicitud
+            var nivelClaim = User.FindFirst("Nivel")?.Value;
+            if (!int.TryParse(nivelClaim, out int nivelActor))
+            {
+                return Unauthorized("No se pudo determinar tu nivel de acceso.");
+            }
+
+            // Validar que no intente ascender a alguien por encima de su propio nivel
+            if (nivelActor < creacionDePersonal_Get_DTO.nivel)
+            {
+                return StatusCode(403, new { mensaje = $"Acceso denegado. No puedes asignarle a este usuario un nivel ({creacionDePersonal_Get_DTO.nivel}) superior al tuyo ({nivelActor})." });
+            }
+
+            var personalExistente = await context.Personal.AsNoTracking().FirstOrDefaultAsync(x => x.ci_p == ci);
+            if (personalExistente == null)
             {
                 return NotFound($"La cédula: {ci} no existe.");
+            }
+
+            // Validar Jerarquía: No puede modificar a un usuario que actualmente tiene mayor nivel que él
+            if (nivelActor < personalExistente.nivel)
+            {
+                return StatusCode(403, new { mensaje = $"Acceso denegado. Un usuario de nivel {nivelActor} no puede modificar a un usuario de nivel superior ({personalExistente.nivel})." });
             }
 
             var mapeo = mapper.Map<Personal>(creacionDePersonal_Get_DTO);
@@ -120,6 +155,42 @@ namespace ApiJBA.Controllers
             context.Update(mapeo);
             await context.SaveChangesAsync();
             return Ok(creacionDePersonal_Get_DTO);
+        }
+
+        // 4b. PUT: api/personal/desactivar/{ci} - Desactivar personal (cambiar estado a 0)
+        [HttpPut("desactivar/{ci}")]
+        [Authorize(Policy = "NivelOperativo")] // Acceso desde nivel 7, pero con validación interna de jerarquía
+        public async Task<ActionResult> Desactivar(string ci)
+        {
+            var personal = await context.Personal.FirstOrDefaultAsync(x => x.ci_p == ci);
+            if (personal == null)
+            {
+                return NotFound($"La cédula: {ci} no existe.");
+            }
+
+            // Obtener el nivel del usuario que está haciendo la petición
+            var nivelClaim = User.FindFirst("Nivel")?.Value;
+            if (string.IsNullOrEmpty(nivelClaim) || !int.TryParse(nivelClaim, out int nivelActor))
+            {
+                return Unauthorized("No se pudo determinar tu nivel de acceso.");
+            }
+
+            // Validación de Jerarquía: Un usuario solo puede desactivar a alguien de su mismo nivel o inferior
+            if (nivelActor < personal.nivel)
+            {
+                return StatusCode(403, new { mensaje = $"Acceso denegado. Un usuario de nivel {nivelActor} no puede desactivar a un usuario de nivel superior ({personal.nivel})." });
+            }
+
+            // Cambiar el estado a 0 (inactivo/desactivado)
+            personal.estado = 0;
+            
+            // Opcional: También podríamos registrar la fecha de salida (fs_p) si aplica
+            // personal.fs_p = DateTime.Now;
+
+            context.Update(personal);
+            await context.SaveChangesAsync();
+
+            return Ok(new { mensaje = $"El personal con cédula {ci} ha sido desactivado exitosamente." });
         }
 
         // 5. POST: api/personal/login - Iniciar sesión validando el nivel de rango (nivel >= 7)
@@ -139,38 +210,73 @@ namespace ApiJBA.Controllers
                 return BadRequest($"Acceso denegado. Tu nivel de rango ({personal.nivel}) es inferior al mínimo requerido (nivel 7) para utilizar el sistema.");
             }
 
+            var dto = mapper.Map<CreacionDePersonal_Get_DTO>(personal);
+            
             // Generar el Token JWT
+            var token = GenerarTokenJWT(personal);
+
+            return Ok(new
+            {
+                mensaje = "Inicio de sesión exitoso. Bienvenido al sistema.",
+                usuario = dto,
+                token = token,
+                expiracion = DateTime.UtcNow.AddMinutes(5)
+            });
+        }
+
+        // 6. GET: api/personal/refresh-token - Renovar el token si hay actividad
+        [HttpGet("refresh-token")]
+        [Authorize]
+        public async Task<ActionResult> RefreshToken()
+        {
+            // Obtener la cédula del usuario desde los claims del token actual
+            var ci = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(ci))
+            {
+                return Unauthorized("Token inválido.");
+            }
+
+            // Buscar el usuario actualizado en la BD
+            var personal = await context.Personal.AsNoTracking().FirstOrDefaultAsync(x => x.ci_p == ci);
+            if (personal == null || personal.nivel < 7)
+            {
+                return Unauthorized("Usuario no existe o no tiene permisos.");
+            }
+
+            // Generar un nuevo token con otros 5 minutos de vida
+            var nuevoToken = GenerarTokenJWT(personal);
+
+            return Ok(new
+            {
+                mensaje = "Sesión renovada por 5 minutos más.",
+                token = nuevoToken,
+                expiracion = DateTime.UtcNow.AddMinutes(5)
+            });
+        }
+
+        private string GenerarTokenJWT(Personal personal)
+        {
             var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.NameIdentifier, personal.ci_p),
                 new Claim(ClaimTypes.Name, personal.nombre_p),
+                new Claim(ClaimTypes.Role, personal.cargo ?? ""),
                 new Claim("Nivel", personal.nivel.ToString())
             };
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["Jwt:Key"] ?? throw new InvalidOperationException("Clave JWT (Jwt:Key) no configurada.")));
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["Jwt:Key"] ?? ""));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            var expiracion = DateTime.UtcNow.AddMinutes(5);
 
-            var tokenDescriptor = new SecurityTokenDescriptor
-            {
-                Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddMinutes(5), // Expiración de 5 minutos
-                Issuer = configuration["Jwt:Issuer"],
-                Audience = configuration["Jwt:Audience"],
-                SigningCredentials = creds
-            };
+            var token = new JwtSecurityToken(
+                issuer: configuration["Jwt:Issuer"],
+                audience: configuration["Jwt:Audience"],
+                claims: claims,
+                expires: expiracion,
+                signingCredentials: creds
+            );
 
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var token = tokenHandler.CreateToken(tokenDescriptor);
-            var tokenString = tokenHandler.WriteToken(token);
-
-            var dto = mapper.Map<CreacionDePersonal_Get_DTO>(personal);
-            return Ok(new
-            {
-                mensaje = "Inicio de sesión exitoso. Bienvenido al sistema.",
-                token = tokenString,
-                expiracion = tokenDescriptor.Expires,
-                usuario = dto
-            });
+            return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
         // Método auxiliar para la asignación automática del cargo por nivel

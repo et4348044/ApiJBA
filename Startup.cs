@@ -1,9 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
-using Microsoft.OpenApi.Models;
+using System;
 
 namespace ApiJBA
 {
@@ -26,68 +23,77 @@ namespace ApiJBA
             services.AddControllers().AddJsonOptions(x =>
                 x.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles);
 
-            // Configurar JWT Authentication
-            var jwtKey = Configuration["Jwt:Key"] ?? throw new ArgumentNullException("Jwt:Key no está configurado.");
-            var jwtIssuer = Configuration["Jwt:Issuer"];
-            var jwtAudience = Configuration["Jwt:Audience"];
-
-            services.AddAuthentication(options =>
-            {
-                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-            })
-            .AddJwtBearer(options =>
-            {
-                options.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidateLifetime = true,
-                    ValidateIssuerSigningKey = true,
-                    ValidIssuer = jwtIssuer,
-                    ValidAudience = jwtAudience,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
-                    ClockSkew = TimeSpan.Zero // Expiración exacta de 5 minutos sin retardo de tolerancia
-                };
-            });
-
-            // Configurar Políticas de Autorización basadas en Jerarquías (Nivel)
-            services.AddAuthorization(options =>
-            {
-                options.AddPolicy("Nivel10", policy => policy.RequireClaim("Nivel", "10"));
-                options.AddPolicy("Nivel7", policy => policy.RequireAssertion(context =>
-                    context.User.HasClaim(c => c.Type == "Nivel" && int.TryParse(c.Value, out var lvl) && lvl >= 7)));
-            });
-
-            // Generador de Swagger con soporte para cabecera de Autorización Bearer Token
+            // Generador de Swagger
             services.AddSwaggerGen(c =>
             {
-                c.SwaggerDoc("v1", new OpenApiInfo { Title = "ApiJBA", Version = "v1" });
-                
-                c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+                c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
                 {
                     Name = "Authorization",
-                    Type = SecuritySchemeType.ApiKey,
+                    Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
                     Scheme = "Bearer",
                     BearerFormat = "JWT",
-                    In = ParameterLocation.Header,
-                    Description = "Ingrese 'Bearer' seguido de un espacio y su Token JWT.\n\nEjemplo: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'"
+                    In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+                    Description = "Ingrese 'Bearer' [espacio] y luego su token.\r\n\r\nEjemplo: \"Bearer 12345abcdef\""
                 });
-
-                c.AddSecurityRequirement(new OpenApiSecurityRequirement
+                c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
                 {
                     {
-                        new OpenApiSecurityScheme
+                        new Microsoft.OpenApi.Models.OpenApiSecurityScheme
                         {
-                            Reference = new OpenApiReference
+                            Reference = new Microsoft.OpenApi.Models.OpenApiReference
                             {
-                                Type = ReferenceType.SecurityScheme,
+                                Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
                                 Id = "Bearer"
                             }
                         },
                         new string[] {}
                     }
                 });
+            });
+
+            // Configuración de Autenticación JWT
+            services.AddAuthentication(Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(options =>
+                {
+                    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+                    {
+                        ValidateIssuer = true,
+                        ValidateAudience = true,
+                        ValidateLifetime = true,
+                        ValidateIssuerSigningKey = true,
+                        ValidIssuer = Configuration["Jwt:Issuer"],
+                        ValidAudience = Configuration["Jwt:Audience"],
+                        IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(Configuration["Jwt:Key"] ?? "")),
+                        ClockSkew = TimeSpan.Zero // Fundamental para que expire exactamente a los 5 minutos sin tolerancia adicional
+                    };
+                });
+
+            // Configuración de Políticas de Autorización por Niveles
+            services.AddAuthorization(options =>
+            {
+                // Política para Secretarias, Subdirectores, Directores y Sistemas (Niveles 7 al 10)
+                options.AddPolicy("NivelOperativo", policy =>
+                    policy.RequireAssertion(context =>
+                    {
+                        var nivelClaim = context.User.FindFirst("Nivel");
+                        if (nivelClaim != null && int.TryParse(nivelClaim.Value, out int nivel))
+                        {
+                            return nivel >= 7 && nivel <= 10;
+                        }
+                        return false;
+                    }));
+
+                // Política para Directores y Sistemas (Niveles 9 y 10) - Ejemplo para Desactivar
+                options.AddPolicy("NivelAdministrador", policy =>
+                    policy.RequireAssertion(context =>
+                    {
+                        var nivelClaim = context.User.FindFirst("Nivel");
+                        if (nivelClaim != null && int.TryParse(nivelClaim.Value, out int nivel))
+                        {
+                            return nivel >= 9;
+                        }
+                        return false;
+                    }));
             });
 
             // Configuración de AutoMapper buscando los perfiles del proyecto
@@ -120,8 +126,7 @@ namespace ApiJBA
 
             app.UseCors();
 
-            app.UseAuthentication();
-
+            app.UseAuthentication(); // Debe ir antes de UseAuthorization
             app.UseAuthorization();
 
             app.UseEndpoints(endpoints =>
