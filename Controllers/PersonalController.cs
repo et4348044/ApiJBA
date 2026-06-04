@@ -69,6 +69,82 @@ namespace ApiJBA.Controllers
             return Ok(dto);
         }
 
+        // 2b. GET: api/personal/{ci}/creador - Obtener quién creó a este usuario
+        [HttpGet("{ci}/creador")]
+        [Authorize(Policy = "NivelOperativo")]
+        public async Task<ActionResult> GetCreador(string ci)
+        {
+            // Busca en la tabla de operaciones quién registró la acción "CREAR_PERSONAL" para este registro_id
+            var operacion = await context.Operaciones
+                .AsNoTracking()
+                .Where(x => x.registro_id == ci && x.tipo_operacion == "CREAR_PERSONAL")
+                .FirstOrDefaultAsync();
+
+            if (operacion == null)
+            {
+                return NotFound(new { mensaje = $"No se encontró un registro de creación para el personal con cédula {ci}." });
+            }
+
+            // Devuelve el ci_p (como id_p según lo solicitado) del autor y la fecha
+            return Ok(new 
+            { 
+                id_p = operacion.ci_p,
+                fecha_creacion = operacion.fecha
+            });
+        }
+
+        // 2c. GET: api/personal/{ci}/modificadores - Obtener quién modificó a este usuario (Historial)
+        [HttpGet("{ci}/modificadores")]
+        [Authorize(Policy = "NivelOperativo")]
+        public async Task<ActionResult> GetModificadores(string ci)
+        {
+            // Un usuario puede ser modificado muchas veces, así que buscamos todas las modificaciones
+            // y las ordenamos de la más reciente a la más antigua
+            var operaciones = await context.Operaciones
+                .AsNoTracking()
+                .Where(x => x.registro_id == ci && x.tipo_operacion == "MODIFICAR_PERSONAL")
+                .OrderByDescending(x => x.fecha)
+                .Select(x => new 
+                {
+                    id_p = x.ci_p,
+                    fecha_modificacion = x.fecha
+                })
+                .ToListAsync();
+
+            if (!operaciones.Any())
+            {
+                return NotFound(new { mensaje = $"No se encontraron registros de modificación para el personal con cédula {ci}." });
+            }
+
+            // Devuelve la lista de modificaciones con su id_p (el autor) y la fecha
+            return Ok(operaciones);
+        }
+
+        // 2d. GET: api/personal/{ci}/desactivador - Obtener quién desactivó a este usuario
+        [HttpGet("{ci}/desactivador")]
+        [Authorize(Policy = "NivelOperativo")]
+        public async Task<ActionResult> GetDesactivador(string ci)
+        {
+            // Buscamos la acción de desactivación más reciente
+            var operacion = await context.Operaciones
+                .AsNoTracking()
+                .Where(x => x.registro_id == ci && x.tipo_operacion == "DESACTIVAR_PERSONAL")
+                .OrderByDescending(x => x.fecha)
+                .FirstOrDefaultAsync();
+
+            if (operacion == null)
+            {
+                return NotFound(new { mensaje = $"No se encontró un registro de desactivación para el personal con cédula {ci}." });
+            }
+
+            // Devuelve el ci_p (como id_p según lo solicitado) del autor y la fecha
+            return Ok(new 
+            { 
+                id_p = operacion.ci_p,
+                fecha_desactivacion = operacion.fecha
+            });
+        }
+
         // 3. POST: api/personal - Registrar un nuevo personal
         [HttpPost]
         [Authorize(Policy = "NivelOperativo")]
@@ -103,6 +179,20 @@ namespace ApiJBA.Controllers
             }
 
             context.Add(mapeo);
+            
+            // Obtener CI del usuario que está haciendo la acción (el autor)
+            var ciAutor = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "SISTEMA";
+            
+            // Registrar la auditoría
+            var operacion = new Operacion
+            {
+                ci_p = ciAutor,
+                fecha = DateTime.Now,
+                registro_id = mapeo.ci_p,
+                tipo_operacion = "CREAR_PERSONAL"
+            };
+            context.Operaciones.Add(operacion);
+
             await context.SaveChangesAsync();
 
             var getDto = mapper.Map<CreacionDePersonal_Get_DTO>(mapeo);
@@ -153,6 +243,20 @@ namespace ApiJBA.Controllers
             }
 
             context.Update(mapeo);
+            
+            // Obtener CI del usuario que está haciendo la acción (el autor)
+            var ciAutor = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "SISTEMA";
+
+            // Registrar la auditoría
+            var operacion = new Operacion
+            {
+                ci_p = ciAutor,
+                fecha = DateTime.Now,
+                registro_id = mapeo.ci_p,
+                tipo_operacion = "MODIFICAR_PERSONAL"
+            };
+            context.Operaciones.Add(operacion);
+
             await context.SaveChangesAsync();
             return Ok(creacionDePersonal_Get_DTO);
         }
@@ -188,6 +292,20 @@ namespace ApiJBA.Controllers
             // personal.fs_p = DateTime.Now;
 
             context.Update(personal);
+
+            // Obtener CI del usuario que está haciendo la acción (el autor)
+            var ciAutor = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "SISTEMA";
+
+            // Registrar la auditoría
+            var operacion = new Operacion
+            {
+                ci_p = ciAutor,
+                fecha = DateTime.Now,
+                registro_id = personal.ci_p,
+                tipo_operacion = "DESACTIVAR_PERSONAL"
+            };
+            context.Operaciones.Add(operacion);
+
             await context.SaveChangesAsync();
 
             return Ok(new { mensaje = $"El personal con cédula {ci} ha sido desactivado exitosamente." });

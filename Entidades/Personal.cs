@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Collections.Generic;
 
 namespace ApiJBA.Entidades
 {
@@ -45,5 +46,8 @@ namespace ApiJBA.Entidades
 
         [Column(TypeName = "image")] // Mapea al tipo de datos legacy 'image' en SQL Server
         public byte[]? Archivo { get; set; }
+
+        // Propiedad de navegación (Relación 1 a muchos con Operaciones)
+        public ICollection<Operacion> Operaciones { get; set; } = new List<Operacion>();
     }
 }

@@ -4,6 +4,7 @@ using ApiJBA;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ApiJBA.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260604225618_AddOperacionesTable")]
+    partial class AddOperacionesTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -52,7 +55,7 @@ namespace ApiJBA.Migrations
 
                     b.HasIndex("ci_p");
 
-                    b.ToTable("operaciones", (string)null);
+                    b.ToTable("operaciones");
                 });
 
             modelBuilder.Entity("ApiJBA.Entidades.Personal", b =>
@@ -102,7 +105,7 @@ namespace ApiJBA.Migrations
 
                     b.HasKey("ci_p");
 
-                    b.ToTable("personal", (string)null);
+                    b.ToTable("personal");
                 });
 
             modelBuilder.Entity("ApiJBA.Entidades.Operacion", b =>

@@ -10,6 +10,7 @@ namespace ApiJBA
         }
 
         public DbSet<Personal> Personal { get; set; }
+        public DbSet<Operacion> Operaciones { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
