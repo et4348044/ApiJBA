@@ -9,12 +9,14 @@ namespace ApiJBA.Entidades
     public class Personal
     {
         [Key]
-        [DatabaseGenerated(DatabaseGeneratedOption.None)] // La cédula se ingresa manualmente, no es auto-incremental
+        [DatabaseGenerated(DatabaseGeneratedOption.None)]
         [Required]
-        [StringLength(20)]
+        [Column(TypeName = "varchar(16)")]
+        [StringLength(16)]
         public string ci_p { get; set; } = default!;
 
         [Required]
+        [Column(TypeName = "varchar(50)")]
         [StringLength(50)]
         public string nombre_p { get; set; } = default!;
 
@@ -22,30 +24,36 @@ namespace ApiJBA.Entidades
         public int nivel { get; set; }
 
         [Required]
-        public int estado { get; set; }
+        public bool estado { get; set; }
 
         [Required]
+        [Column(TypeName = "varchar(25)")]
         [StringLength(25)]
         public string cargo { get; set; } = default!;
 
         [Required]
-        public DateTime fr_p { get; set; }
+        public DateTime fecha_registro { get; set; }
 
-        public DateTime? fs_p { get; set; } // Puede ser nulo si no ha renunciado
+        public DateTime? fecha_salida { get; set; }
 
         [Required]
-        [StringLength(120)]
-        public string dir_p { get; set; } = default!;
-
+        [Column(TypeName = "varchar(50)")]
         [StringLength(50)]
-        public string? correo_p { get; set; } // Puede ser nulo si no tiene
+        public string direccion_p { get; set; } = default!;
 
-        [Required]
+        [Column(TypeName = "varchar(25)")]
+        [StringLength(25)]
+        public string? correo_p { get; set; }
+
+        [Column(TypeName = "varchar(255)")]
         [StringLength(255)]
-        public string NroCuenta { get; set; } = default!;
+        public string? foto_p { get; set; }
 
-        [Column(TypeName = "image")] // Mapea al tipo de datos legacy 'image' en SQL Server
-        public byte[]? Archivo { get; set; }
+        public DateTime? fecha_voucher { get; set; }
+
+        [Column(TypeName = "varchar(255)")]
+        [StringLength(255)]
+        public string? tipo_preparacion { get; set; }
 
         // Propiedad de navegación (Relación 1 a muchos con Operaciones)
         public ICollection<Operacion> Operaciones { get; set; } = new List<Operacion>();

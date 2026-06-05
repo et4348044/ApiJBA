@@ -7,13 +7,14 @@ namespace ApiJBA.DTOs
         public string ci_p { get; set; } = default!;
         public string nombre_p { get; set; } = default!;
         public int nivel { get; set; }
-        public int estado { get; set; }
+        public bool estado { get; set; }
         public string cargo { get; set; } = default!;
-        public DateTime fr_p { get; set; }
-        public DateTime? fs_p { get; set; }
-        public string dir_p { get; set; } = default!;
+        public DateTime fecha_registro { get; set; }
+        public DateTime? fecha_salida { get; set; }
+        public string direccion_p { get; set; } = default!;
         public string? correo_p { get; set; }
-        public string NroCuenta { get; set; } = default!;
-        public byte[]? Archivo { get; set; }
+        public string? foto_p { get; set; }
+        public DateTime? fecha_voucher { get; set; }
+        public string? tipo_preparacion { get; set; }
     }
 }

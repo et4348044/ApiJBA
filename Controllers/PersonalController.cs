@@ -285,8 +285,8 @@ namespace ApiJBA.Controllers
                 return StatusCode(403, new { mensaje = $"Acceso denegado. Un usuario de nivel {nivelActor} no puede desactivar a un usuario de nivel superior ({personal.nivel})." });
             }
 
-            // Cambiar el estado a 0 (inactivo/desactivado)
-            personal.estado = 0;
+            // Cambiar el estado a false (inactivo/desactivado)
+            personal.estado = false;
             
             // Opcional: También podríamos registrar la fecha de salida (fs_p) si aplica
             // personal.fs_p = DateTime.Now;

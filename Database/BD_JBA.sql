@@ -24,17 +24,18 @@ BEGIN TRANSACTION;
 GO
 
 CREATE TABLE [personal] (
-    [ci_p] nvarchar(20) NOT NULL,
-    [nombre_p] nvarchar(50) NOT NULL,
+    [ci_p] varchar(16) NOT NULL,
+    [nombre_p] varchar(50) NOT NULL,
     [nivel] int NOT NULL,
-    [estado] int NOT NULL,
-    [cargo] nvarchar(25) NOT NULL,
-    [fr_p] datetime2 NOT NULL,
-    [fs_p] datetime2 NULL,
-    [dir_p] nvarchar(120) NOT NULL,
-    [correo_p] nvarchar(50) NULL,
-    [NroCuenta] nvarchar(255) NOT NULL,
-    [Archivo] image NULL,
+    [estado] bit NOT NULL,
+    [cargo] varchar(25) NOT NULL,
+    [fecha_registro] datetime NOT NULL,
+    [fecha_salida] datetime NULL,
+    [direccion_p] varchar(50) NOT NULL,
+    [correo_p] varchar(25) NULL,
+    [foto_p] varchar(255) NULL,
+    [fecha_voucher] datetime NULL,
+    [tipo_preparacion] varchar(255) NULL,
     CONSTRAINT [PK_personal] PRIMARY KEY ([ci_p])
 );
 GO

@@ -12,9 +12,13 @@ ApiJBA es una API Web robusta y moderna desarrollada en **ASP.NET Core (C#)** di
   - `7` -> Secretaria
   - `6` -> Vocero
   - `1` a `5` -> Personal General
-- **Control de Accesos Jerárquico**:
-  - Implementación de un endpoint de inicio de sesión (`api/personal/login`) que valida la cédula (`ci_p`).
-  - **Restricción de Acceso**: Solo los usuarios con un nivel de rango **mayor o igual a 7** (Secretaria, Subdirector, Director, Sistemas) tienen permitido el ingreso al sistema. Los niveles inferiores a 7 (como el nivel 1 de Personal General) tienen el acceso denegado.
+- **Seguridad y Autenticación JWT**:
+  - Implementación de seguridad mediante JSON Web Tokens (JWT) Bearer con expiración de 5 minutos.
+  - **Restricción de Acceso**: Solo los usuarios con un nivel de rango **mayor o igual a 7** tienen permitido el ingreso al sistema obteniendo un token.
+  - **Control Basado en Roles**: Usuarios de Nivel 10 tienen acceso total, mientras que niveles operativos tienen permisos acordes.
+- **Registro de Auditoría (Audit Logging)**:
+  - Sistema integral de auditoría que guarda el historial de todas las operaciones (creación, modificación, desactivación).
+  - Consulta del creador, modificadores y desactivador de un usuario, identificando al autor y la fecha exacta.
 
 ## Tecnologías Utilizadas
 
@@ -75,5 +79,12 @@ Para garantizar un rendimiento excelente bajo especificaciones de hardware de ga
     "ci_p": "1234567"
   }
   ```
-  *Nota: Retorna éxito si el nivel del usuario es mayor o igual a 7.*
+  *Nota: Retorna un token JWT válido por 5 minutos si el nivel es mayor o igual a 7.*
+- `GET /api/personal/refresh-token` - Renovar el token activo.
+
+### Auditoría
+
+- `GET /api/personal/{ci}/creador` - Obtiene quién creó el registro.
+- `GET /api/personal/{ci}/modificadores` - Obtiene el historial de quiénes han modificado el registro.
+- `GET /api/personal/{ci}/desactivador` - Obtiene quién desactivó el registro.
 
