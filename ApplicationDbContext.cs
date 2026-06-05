@@ -16,7 +16,12 @@ namespace ApiJBA
         {
             base.OnModelCreating(modelBuilder);
 
-            // Las relaciones mediante Fluent API y configuraciones de tablas se agregarán aquí paso a paso
+            // Configuración en cascada de la relación entre Personal y Operaciones (Auditoría)
+            modelBuilder.Entity<Operacion>()
+                .HasOne(o => o.Personal)
+                .WithMany(p => p.Operaciones)
+                .HasForeignKey(o => o.ci_p)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }
