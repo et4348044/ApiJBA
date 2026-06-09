@@ -57,5 +57,11 @@ namespace ApiJBA.Entidades
 
         // Propiedad de navegación (Relación 1 a muchos con Operaciones)
         public ICollection<Operacion> Operaciones { get; set; } = new List<Operacion>();
+
+        public ICollection<Colaboracion> Colaboraciones { get; set; } = new List<Colaboracion>();
+        public ICollection<Recepcion> Recepciones { get; set; } = new List<Recepcion>();
+        public ICollection<Matricula> Matriculas { get; set; } = new List<Matricula>();
+        public ICollection<Asistencia> Asistencias { get; set; } = new List<Asistencia>();
+        public ICollection<Traslado> Traslados { get; set; } = new List<Traslado>();
     }
 }
