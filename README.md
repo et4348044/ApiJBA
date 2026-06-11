@@ -88,3 +88,26 @@ Para garantizar un rendimiento excelente bajo especificaciones de hardware de ga
 - `GET /api/personal/{ci}/modificadores` - Obtiene el historial de quiénes han modificado el registro.
 - `GET /api/personal/{ci}/desactivador` - Obtiene quién desactivó el registro.
 
+### Tablas Adicionales de la Base de Datos
+
+Para dar soporte integral al resto de las operaciones del sistema, se han creado controladores individuales para las otras 16 tablas. Todos estos endpoints admiten solicitudes `GET` (para consultas masivas optimizadas con `AsNoTracking`) y `POST` (para inserciones con validaciones automáticas de claves foráneas). Requieren autenticación JWT con la política `NivelOperativo`:
+
+- `GET /api/alumnos` & `POST /api/alumnos` - Gestión de alumnos.
+- `GET /api/asistencias` & `POST /api/asistencias` - Control de entrada/salida de personal.
+- `GET /api/categorias` & `POST /api/categorias` - Categorías de productos.
+- `GET /api/colaboraciones` & `POST /api/colaboraciones` - Órdenes de colaboración de proveedores.
+- `GET /api/depositos` & `POST /api/depositos` - Depósitos y almacenes.
+- `GET /api/detallecolaboraciones` & `POST /api/detallecolaboraciones` - Detalle de las órdenes de colaboración.
+- `GET /api/detallerecepciones` & `POST /api/detallerecepciones` - Detalle de recepción de productos.
+- `GET /api/inscripciones` & `POST /api/inscripciones` - Inscripciones de alumnos en aulas.
+- `GET /api/matriculas` & `POST /api/matriculas` - Aulas, secciones y capacidades de matrícula.
+- `GET /api/operaciones` & `POST /api/operaciones` - Historial general de operaciones de auditoría.
+- `GET /api/productos` & `POST /api/productos` - Catálogo de productos.
+- `GET /api/proveedores` & `POST /api/proveedores` - Proveedores de servicios/productos.
+- `GET /api/recepciones` & `POST /api/recepciones` - Recepción de colaboraciones.
+- `GET /api/representantes` & `POST /api/representantes` - Representantes o padres de alumnos.
+- `GET /api/stockdepositos` & `POST /api/stockdepositos` - Inventario y stock por depósito.
+- `GET /api/traslados` & `POST /api/traslados` - Traslados de productos entre depósitos.
+
+*Nota: Los DTOs de entrada están definidos en `DTOs/TableDtos.cs` y los mapeos se realizan automáticamente mediante perfiles de AutoMapper en `Utilidades/AutoMapperProfiles.cs`.*
+
